@@ -239,23 +239,6 @@ OPENROUTER_API_KEY=your_api_key
 
 6️⃣ Click Explain to view AI reasoning
 
-🏆 Hackathon Value
-
-PolicyGuard AI combines:
-
-Generative AI
-→ Understands policy documents
-
-Deterministic Computing
-→ Executes high-speed validation
-
-Explainable AI
-→ Provides transparent reasoning
-
-Most AI systems only generate text.
-
-PolicyGuard AI automates real compliance workflows.
-
 👨‍💻 Author
 
 Harsh Bhavsar
