@@ -12,6 +12,9 @@ export default function DatasetsPage() {
     const [datasets, setDatasets] = useState<any[]>([]);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [scanningId, setScanningId] = useState<string | null>(null);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [estimatedTime, setEstimatedTime] = useState<number | null>(null);
+    const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "analyzing">("idle");
 
     const fetchDatasets = async () => {
         try {
@@ -43,21 +46,70 @@ export default function DatasetsPage() {
         if (!file) return;
 
         setIsUploading(true);
+        setUploadStatus("uploading");
+        setUploadProgress(0);
+        setEstimatedTime(null);
+
         const formData = new FormData();
         formData.append("file", file);
 
+        const startTime = Date.now();
+
         try {
-            await fetch(`${process.env.NEXT_PUBLIC_API_URL}/datasets/upload`, {
-                method: "POST",
-                body: formData,
+            await new Promise<void>((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open("POST", `${process.env.NEXT_PUBLIC_API_URL}/datasets/upload`, true);
+
+                xhr.upload.onprogress = (event) => {
+                    if (event.lengthComputable) {
+                        const percentComplete = Math.round((event.loaded / event.total) * 100);
+                        setUploadProgress(percentComplete);
+
+                        const timeElapsed = (Date.now() - startTime) / 1000;
+                        if (timeElapsed > 1 && event.loaded > 0) {
+                            const uploadSpeed = event.loaded / timeElapsed;
+                            const timeRemaining = (event.total - event.loaded) / uploadSpeed;
+                            setEstimatedTime(timeRemaining);
+                        }
+
+                        if (percentComplete === 100) {
+                            setUploadStatus("analyzing");
+                        }
+                    }
+                };
+
+                xhr.onload = () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        resolve();
+                    } else {
+                        reject(new Error("Upload failed"));
+                    }
+                };
+
+                xhr.onerror = () => reject(new Error("Network Error"));
+
+                xhr.send(formData);
             });
             await fetchDatasets();
             setDialogOpen(false);
         } catch (err) {
             console.error(err);
+            alert("Error uploading dataset.");
         } finally {
             setIsUploading(false);
+            setUploadStatus("idle");
+            setUploadProgress(0);
+            setEstimatedTime(null);
         }
+    };
+
+    const formatTime = (seconds: number | null) => {
+        if (seconds === null || !isFinite(seconds)) return "Calculating time...";
+        if (seconds < 1) return "Almost done...";
+        const m = Math.floor(seconds / 60);
+        const s = Math.floor(seconds % 60);
+        if (m > 0) return `${m}m ${s}s remaining`;
+        return `${s}s remaining`;
     };
 
     const runScan = async (datasetId: string) => {
@@ -122,7 +174,24 @@ export default function DatasetsPage() {
                             <label htmlFor="dataset-upload" className="flex flex-col items-center justify-center w-full h-48 border-2 border-zinc-800 border-dashed rounded-lg cursor-pointer bg-zinc-900/50 hover:bg-zinc-900 transition-colors">
                                 <div className="flex flex-col items-center justify-center pt-5 pb-6">
                                     {isUploading ? (
-                                        <span className="text-blue-500 animate-pulse font-medium">Analyzing Schema...</span>
+                                        <div className="flex flex-col items-center justify-center space-y-3 w-full px-8">
+                                            {uploadStatus === "uploading" ? (
+                                                <>
+                                                    <Loader2 className="h-8 w-8 text-blue-500 animate-spin mb-2" />
+                                                    <span className="text-zinc-300 font-medium">Uploading Dataset ({uploadProgress}%)</span>
+                                                    <div className="w-full bg-zinc-800 rounded-full h-2.5">
+                                                        <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
+                                                    </div>
+                                                    <span className="text-xs text-zinc-500">{formatTime(estimatedTime)}</span>
+                                                </>
+                                            ) : (
+                                                <div className="flex flex-col items-center">
+                                                    <Loader2 className="h-8 w-8 text-emerald-500 animate-spin mb-3" />
+                                                    <span className="text-emerald-500 animate-pulse font-medium">Analyzing Schema...</span>
+                                                    <span className="text-xs text-zinc-500 mt-2">This may take a moment for large files.</span>
+                                                </div>
+                                            )}
+                                        </div>
                                     ) : (
                                         <>
                                             <UploadCloud className="w-10 h-10 mb-3 text-zinc-500" />
